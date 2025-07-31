@@ -15,7 +15,7 @@ generator client {
   provider = "prisma-client-js"
 }
 
-model Message {
+model message {
   id        Int      @id @default(autoincrement())
   sender    String   // "user" or "bot"
   content   String
