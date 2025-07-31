@@ -1,5 +1,3 @@
-// app/api/chat/route.ts
-
 import { NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { PrismaClient } from "@prisma/client";
@@ -8,7 +6,6 @@ import fs from "fs";
 import path from "path";
 import { Readable } from "stream";
 import mime from "mime-types";
-//import type { IncomingMessage } from "http";
 
 export const runtime = "nodejs";
 
@@ -48,12 +45,12 @@ async function parseMultipartForm(req: Request): Promise<{ fields: Fields; files
     multiples: false,
   });
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const nodeReq: any = Object.assign(toNodeReadable(req), {
     headers: Object.fromEntries(req.headers.entries()),
     method: req.method,
     url: "",
   });
-	
 
   return new Promise((resolve, reject) => {
     form.parse(nodeReq, (err, fields, files) => {
@@ -108,7 +105,7 @@ export async function POST(req: Request) {
         fileContent = fs.readFileSync(file.filepath, "utf-8");
       }
 
-      // You can add PDF or image parsing logic here
+      // TODO: Add support for PDF/image parsing here later
     }
 
     // ✅ Save USER message
