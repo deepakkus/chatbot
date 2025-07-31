@@ -48,7 +48,7 @@ async function parseMultipartForm(req: Request): Promise<{ fields: Fields; files
     multiples: false,
   });
 
-  const nodeReq: IncomingMessage = Object.assign(toNodeReadable(req), {
+  const nodeReq: any = Object.assign(toNodeReadable(req), {
     headers: Object.fromEntries(req.headers.entries()),
     method: req.method,
     url: "",
