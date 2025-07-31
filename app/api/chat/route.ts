@@ -3,11 +3,12 @@
 import { NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { PrismaClient } from "@prisma/client";
-import formidable from "formidable";
+import formidable, { Fields, Files } from "formidable";
 import fs from "fs";
 import path from "path";
 import { Readable } from "stream";
 import mime from "mime-types";
+import type { IncomingMessage } from "http";
 
 export const runtime = "nodejs";
 
@@ -35,7 +36,7 @@ function toNodeReadable(req: Request): Readable {
   });
 }
 
-async function parseMultipartForm(req: Request): Promise<{ fields: any; files: any }> {
+async function parseMultipartForm(req: Request): Promise<{ fields: Fields; files: Files }> {
   const uploadDir = path.join(process.cwd(), "public/uploads");
   if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
@@ -47,14 +48,14 @@ async function parseMultipartForm(req: Request): Promise<{ fields: any; files: a
     multiples: false,
   });
 
-  const nodeReq = Object.assign(toNodeReadable(req), {
+  const nodeReq: IncomingMessage = Object.assign(toNodeReadable(req), {
     headers: Object.fromEntries(req.headers.entries()),
     method: req.method,
     url: "",
   });
 
   return new Promise((resolve, reject) => {
-    form.parse(nodeReq as any, (err, fields, files) => {
+    form.parse(nodeReq, (err, fields, files) => {
       if (err) reject(err);
       else resolve({ fields, files });
     });
@@ -106,7 +107,7 @@ export async function POST(req: Request) {
         fileContent = fs.readFileSync(file.filepath, "utf-8");
       }
 
-      // PDF parsing can be added here
+      // You can add PDF or image parsing logic here
     }
 
     // ✅ Save USER message
@@ -131,7 +132,9 @@ export async function POST(req: Request) {
     if (message) parts.push({ text: message });
     if (fileContent) parts.push({ text: `Attached file content:\n\n${fileContent}` });
 
-    const result = await model.generateContent({ contents: [{ role: "user", parts }] });
+    const result = await model.generateContent({
+      contents: [{ role: "user", parts }],
+    });
 
     const botResponse =
       result.response.candidates
