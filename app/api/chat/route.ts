@@ -3,15 +3,6 @@
 import { NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { PrismaClient } from "@prisma/client";
-import { put } from "@vercel/blob";
-
-export const runtime = "nodejs";
-
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};
 
 const prisma = new PrismaClient();
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY!);
@@ -29,31 +20,24 @@ export async function GET() {
   }
 }
 
-// --- POST Message with optional file ---
+// --- POST Message with optional fileUrl ---
 export async function POST(req: Request) {
   try {
-    const formData = await req.formData();
-    const rawMessage = formData.get("content") || formData.get("message");
-    const message = Array.isArray(rawMessage) ? rawMessage[0] : rawMessage?.toString() || "";
+    const { message, fileUrl } = await req.json();
 
-    const file = formData.get("file") as File | null;
-    let fileUrl: string | null = null;
-    let fileContent: string | null = null;
-
-    if (!message.trim() && !file) {
+    if (!message?.trim() && !fileUrl) {
       return NextResponse.json({ error: "Empty message and no file" }, { status: 400 });
     }
 
-    if (file && file.size > 0) {
-      // Upload to Vercel Blob
-      const blob = await put(file.name, file.stream(), { access: "public" });
-      fileUrl = blob.url;
+    let fileContent: string | null = null;
 
-      // Extract text content if file is readable as text
-      const textTypes = ["text/plain", "application/json"];
-      if (textTypes.includes(file.type)) {
-        const text = await file.text();
-        fileContent = text;
+    // Attempt to read file if it's a text-based URL
+    if (fileUrl && fileUrl.endsWith(".txt")) {
+      try {
+        const fileRes = await fetch(fileUrl);
+        fileContent = await fileRes.text();
+      } catch (e) {
+        console.warn("Failed to read file content from blob:", e);
       }
     }
 
@@ -61,12 +45,12 @@ export async function POST(req: Request) {
     await prisma.message.create({
       data: {
         sender: "user",
-        content: message,
+        content: message || "",
         ...(fileUrl && { fileUrl }),
       },
     });
 
-    // 🔮 Generate Gemini response
+    // 🔮 Gemini reply
     const model = genAI.getGenerativeModel({
       model: "models/gemini-2.5-pro",
       generationConfig: {
@@ -89,7 +73,7 @@ export async function POST(req: Request) {
         .join("\n")
         .trim() || "No response from Gemini";
 
-    // ✅ Save BOT response
+    // ✅ Save BOT message
     await prisma.message.create({
       data: {
         sender: "bot",
@@ -100,6 +84,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ response: botResponse });
   } catch (error) {
     console.error("POST /api/chat error:", error);
-    return NextResponse.json({ error: "Gemini or upload error" }, { status: 500 });
+    return NextResponse.json({ error: "Gemini or save error" }, { status: 500 });
   }
 }
