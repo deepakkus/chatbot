@@ -1,13 +1,11 @@
+// app/api/chat/route.ts
+
 import { NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { PrismaClient } from "@prisma/client";
-import formidable, { Fields, Files } from "formidable";
-import fs from "fs";
-import path from "path";
-import { Readable } from "stream";
-import mime from "mime-types";
+import { put } from "@vercel/blob";
 
-export const runtime = "nodejs";
+export const runtime = "edge";
 
 export const config = {
   api: {
@@ -17,48 +15,6 @@ export const config = {
 
 const prisma = new PrismaClient();
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY!);
-
-function toNodeReadable(req: Request): Readable {
-  const reader = req.body?.getReader();
-  return new Readable({
-    async read() {
-      if (!reader) {
-        this.push(null);
-        return;
-      }
-      const { done, value } = await reader.read();
-      if (done) this.push(null);
-      else this.push(value);
-    },
-  });
-}
-
-async function parseMultipartForm(req: Request): Promise<{ fields: Fields; files: Files }> {
-  const uploadDir = path.join(process.cwd(), "public/uploads");
-  if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir, { recursive: true });
-  }
-
-  const form = formidable({
-    uploadDir,
-    keepExtensions: true,
-    multiples: false,
-  });
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const nodeReq: any = Object.assign(toNodeReadable(req), {
-    headers: Object.fromEntries(req.headers.entries()),
-    method: req.method,
-    url: "",
-  });
-
-  return new Promise((resolve, reject) => {
-    form.parse(nodeReq, (err, fields, files) => {
-      if (err) reject(err);
-      else resolve({ fields, files });
-    });
-  });
-}
 
 // --- GET Chat History ---
 export async function GET() {
@@ -76,36 +32,29 @@ export async function GET() {
 // --- POST Message with optional file ---
 export async function POST(req: Request) {
   try {
-    const contentType = req.headers.get("content-type") || "";
-    if (!contentType.includes("multipart/form-data")) {
-      return NextResponse.json({ error: "Invalid Content-Type" }, { status: 400 });
-    }
+    const formData = await req.formData();
+    const rawMessage = formData.get("content") || formData.get("message");
+    const message = Array.isArray(rawMessage) ? rawMessage[0] : rawMessage?.toString() || "";
 
-    const { fields, files } = await parseMultipartForm(req);
+    const file = formData.get("file") as File | null;
+    let fileUrl: string | null = null;
+    let fileContent: string | null = null;
 
-    const rawMessage = fields.content || fields.message;
-    const message = Array.isArray(rawMessage) ? rawMessage[0] : rawMessage || "";
-
-    if (!message.trim() && !files?.file?.[0]) {
+    if (!message.trim() && !file) {
       return NextResponse.json({ error: "Empty message and no file" }, { status: 400 });
     }
 
-    const file = files.file?.[0];
-    let fileUrl: string | null = null;
-    let fileContent: string | null = null;
-    let fileMime: string | null = null;
+    if (file && file.size > 0) {
+      // Upload to Vercel Blob
+      const blob = await put(file.name, file.stream(), { access: "public" });
+      fileUrl = blob.url;
 
-    if (file?.filepath) {
-      const fileName = path.basename(file.filepath);
-      fileUrl = `/uploads/${fileName}`;
-      fileMime = mime.lookup(file.filepath) || "application/octet-stream";
-
-      // Read and extract text content if possible (basic .txt or .json)
-      if (fileMime === "text/plain" || fileMime === "application/json") {
-        fileContent = fs.readFileSync(file.filepath, "utf-8");
+      // Extract text content if file is readable as text
+      const textTypes = ["text/plain", "application/json"];
+      if (textTypes.includes(file.type)) {
+        const text = await file.text();
+        fileContent = text;
       }
-
-      // TODO: Add support for PDF/image parsing here later
     }
 
     // ✅ Save USER message

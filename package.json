@@ -17,6 +17,7 @@
     "@prisma/client": "^6.13.0",
     "@shadcn/ui": "^0.0.4",
     "autoprefixer": "^10.4.21",
+	"@vercel/blob": "^1.1.1",
     "clsx": "^2.1.1",
     "formidable": "^3.5.4",
     "lucide-react": "^0.534.0",

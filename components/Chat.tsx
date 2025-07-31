@@ -27,18 +27,47 @@ export default function Chat() {
     loadMessages();
   }, []);
 
+  const uploadToVercelBlob = async (file: File): Promise<string> => {
+    const res = await fetch("/api/blob/upload-url", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        filename: file.name,
+        contentType: file.type,
+      }),
+    });
+
+    const { url } = await res.json();
+
+    const uploadRes = await fetch(url, {
+      method: "PUT",
+      headers: { "Content-Type": file.type },
+      body: file,
+    });
+
+    if (!uploadRes.ok) throw new Error("Upload failed");
+
+    return url.split("?")[0]; // Return clean blob URL
+  };
+
   const sendMessage = async () => {
     if (!input.trim() && !file) return;
     setLoading(true);
 
-    const formData = new FormData();
-    formData.append("message", input); // ✅ correct key
-    if (file) formData.append("file", file);
-
     try {
+      let fileUrl: string | undefined = undefined;
+
+      if (file) {
+        fileUrl = await uploadToVercelBlob(file);
+      }
+
       const res = await fetch("/api/chat", {
         method: "POST",
-        body: formData,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: input,
+          fileUrl, // send the blob URL to your backend
+        }),
       });
 
       if (!res.ok) {
