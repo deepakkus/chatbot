@@ -18,6 +18,7 @@ generator client {
 model message {
   id        Int      @id @default(autoincrement())
   sender    String   // "user" or "bot"
-  content   String	@db.Text	
+  content   String	@db.Text
+  fileUrl   String?
   createdAt DateTime @default(now())
 }
