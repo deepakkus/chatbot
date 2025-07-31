@@ -5,7 +5,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { PrismaClient } from "@prisma/client";
 import { put } from "@vercel/blob";
 
-export const runtime = "edge";
+export const runtime = "nodejs";
 
 export const config = {
   api: {
