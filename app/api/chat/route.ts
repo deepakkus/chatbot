@@ -67,12 +67,12 @@ export async function POST(req: Request) {
       contents: [{ role: "user", parts }],
     });
 
-    const botResponse =
+    /*const botResponse =
       result.response.candidates
         ?.map((c) => c.content.parts.map((p) => ("text" in p ? p.text : "")).join(""))
         .join("\n")
-        .trim() || "No response from Gemini";
-
+        .trim() || "No response from Gemini";*/
+	const botResponse = result?.response?.text() || "No response from Gemini";
     // ✅ Save BOT message
     await prisma.message.create({
       data: {
