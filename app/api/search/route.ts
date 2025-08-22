@@ -5,6 +5,13 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY as string);
 
+// --- Types ---
+interface GoogleSearchItem {
+  title: string;
+  link: string;
+  snippet: string;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const { query } = await req.json();
@@ -20,20 +27,21 @@ export async function POST(req: NextRequest) {
     );
 
     const searchData = await searchRes.json();
+
     if (!searchData.items) {
       return NextResponse.json({ error: "No results found" }, { status: 404 });
     }
 
-    // Extract top 5 results
-    const results = searchData.items.slice(0, 5).map((item: any) => ({
-      title: item.title,
-      snippet: item.snippet,
-      link: item.link,
+    // Extract top 5 results (typed, no "any")
+    const results: GoogleSearchItem[] = searchData.items.slice(0, 5).map((item: Record<string, unknown>) => ({
+      title: String(item.title ?? ""),
+      snippet: String(item.snippet ?? ""),
+      link: String(item.link ?? ""),
     }));
 
     // 2. Feed into Gemini
     const context = results
-      .map((r: any, i: number) => `${i + 1}. ${r.title}\n${r.snippet}\n${r.link}`)
+      .map((r, i) => `${i + 1}. ${r.title}\n${r.snippet}\n${r.link}`)
       .join("\n\n");
 
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
@@ -57,8 +65,11 @@ Please provide:
       answer: text,
       sources: results,
     });
-  } catch (err: any) {
+  } catch (err) {
     console.error("Search API error:", err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Unknown error" },
+      { status: 500 }
+    );
   }
 }
