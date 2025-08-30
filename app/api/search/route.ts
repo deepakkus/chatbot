@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenerativeAI, GenerateContentResult } from "@google/generative-ai";
 
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY as string);
+
+// Define a type for Google Custom Search result item
+interface GoogleSearchItem {
+  title: string;
+  snippet: string;
+  link: string;
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -11,16 +18,18 @@ export async function POST(req: NextRequest) {
     }
 
     // --- 1. Google Custom Search ---
-    let results: { title: string; snippet: string; link: string }[] = [];
+    let results: GoogleSearchItem[] = [];
     try {
       const searchRes = await fetch(
         `https://www.googleapis.com/customsearch/v1?key=${process.env.GOOGLE_API_KEY}&cx=${process.env.GOOGLE_SEARCH_ENGINE_ID}&q=${encodeURIComponent(
           query
         )}`
       );
-      const searchData = await searchRes.json();
+      const searchData: { items?: { title: string; snippet: string; link: string }[] } =
+        await searchRes.json();
+
       if (searchData.items) {
-        results = searchData.items.slice(0, 5).map((item: any) => ({
+        results = searchData.items.slice(0, 5).map((item) => ({
           title: item.title,
           snippet: item.snippet,
           link: item.link,
@@ -45,19 +54,17 @@ Please provide:
 `;
 
     let answer = "";
-    let raw: any = null;
+    let raw: GenerateContentResult | null = null;
 
     try {
       const geminiRes = await model.generateContent(prompt);
       raw = geminiRes;
 
-      // Try multiple extraction paths
       if (geminiRes?.response?.text) {
         answer = geminiRes.response.text().trim();
       } else if (geminiRes?.response?.candidates?.[0]?.content?.parts?.[0]?.text) {
         answer = geminiRes.response.candidates[0].content.parts[0].text.trim();
       } else if (JSON.stringify(geminiRes).includes("text")) {
-        // brute force last fallback
         answer = "⚠️ Gemini returned text, but parser missed it. See rawGemini.";
       }
     } catch (e) {
@@ -78,7 +85,7 @@ Please provide:
     return NextResponse.json({
       answer,
       sources: results,
-      rawGemini: raw, // temporary debugging
+      rawGemini: raw, // safe type now
     });
   } catch (err: unknown) {
     console.error("Search API error:", err);
